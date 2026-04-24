@@ -1,0 +1,76 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/waline-server",
+    "crates/waline-core",
+    "crates/waline-db",
+    "crates/waline-notify",
+    "crates/waline-auth",
+    "crates/waline-markdown",
+    "crates/waline-common",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[workspace.dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Web framework
+axum = { version = "0.8", features = ["macros", "multipart"] }
+tower-http = { version = "0.6", features = ["cors", "trace", "limit"] }
+tower = { version = "0.5" }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Database
+sqlx = { version = "0.8", features = ["runtime-tokio", "tls-rustls", "chrono", "uuid"] }
+
+# Authentication
+jsonwebtoken = "9"
+bcrypt = "0.17"
+totp-rs = { version = "5", features = ["qr"] }
+
+# Email
+lettre = { version = "0.11", default-features = false, features = ["tokio1-rustls-tls", "smtp-transport", "builder", "hostname"] }
+
+# Markdown
+comrak = { version = "0.36", features = ["shortcodes"] }
+ammonia = "4"
+syntect = "5"
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+
+# Logging/Tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Utilities
+uuid = { version = "1", features = ["v4", "serde"] }
+md-5 = "0.10"
+base64 = "0.22"
+regex = "1"
+thiserror = "2"
+anyhow = "1"
+dotenvy = "0.15"
+hmac = "0.12"
+sha2 = "0.10"
+urlencoding = "2"
+quick-xml = { version = "0.37", features = ["serialize"] }
+
+# Internal crates
+waline-common = { path = "crates/waline-common" }
+waline-core = { path = "crates/waline-core" }
+waline-db = { path = "crates/waline-db" }
+waline-notify = { path = "crates/waline-notify" }
+waline-auth = { path = "crates/waline-auth" }
+waline-markdown = { path = "crates/waline-markdown" }
