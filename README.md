@@ -12,38 +12,20 @@ Waline 评论系统的 Rust 重写版本，使用 Axum + SQLx 构建，提供与
 - **完整 API** — 与原版 Waline 完全兼容的 REST API，可直接配合 Waline 前端使用
 - **Docker 部署** — 多阶段构建，镜像体积小
 
-## 项目结构
-
-```
-waline-rust/
-├── crates/
-│   ├── waline-server/    # Axum Web 服务端，路由与处理器
-│   ├── waline-core/      # 配置加载、应用状态
-│   ├── waline-db/        # 数据库适配层 (PostgreSQL/MySQL/SQLite)
-│   ├── waline-auth/      # JWT、phpass、2FA、OAuth、CAPTCHA
-│   ├── waline-notify/    # 邮件与 8 种通知渠道
-│   ├── waline-markdown/  # Markdown 渲染与 XSS 过滤
-│   └── waline-common/    # 共享类型、错误定义、数据模型
-├── Cargo.toml            # Workspace 根配置
-└── Dockerfile            # 多阶段 Docker 构建
-```
-
 ## 快速开始
 
 ### 从源码构建
 
-需要 Rust 1.75+ 和 Cargo。
-
 ```bash
 # 克隆仓库
 git clone <repo-url>
-cd waline-rust
+cd waline-server
 
 # 构建
 cargo build --release
 
-# 配置数据库（至少配置一种）
-export SQLITE_PATH=/data/waline.db
+# 配置数据库
+export DATABASE_URL="sqlite://./data/waline.sqlite"
 
 # 设置 JWT 密钥（生产环境必须）
 export JWT_TOKEN=your-secret-key
@@ -60,33 +42,12 @@ export JWT_TOKEN=your-secret-key
 # 构建镜像
 docker build -t waline-rust .
 
-# 使用 SQLite 运行
 docker run -d \
   -p 8360:8360 \
-  -e SQLITE_PATH=/data/waline.db \
+  -e DATABASE_URL="sqlite://./data/waline.sqlite" \
   -e JWT_TOKEN=your-secret-key \
   -v waline-data:/data \
-  waline-rust
-
-# 使用 PostgreSQL 运行
-docker run -d \
-  -p 8360:8360 \
-  -e PG_DB=waline \
-  -e PG_HOST=db.example.com \
-  -e PG_USER=waline \
-  -e PG_PASSWORD=secret \
-  -e JWT_TOKEN=your-secret-key \
-  waline-rust
-
-# 使用 MySQL 运行
-docker run -d \
-  -p 8360:8360 \
-  -e MYSQL_DB=waline \
-  -e MYSQL_HOST=db.example.com \
-  -e MYSQL_USER=waline \
-  -e MYSQL_PASSWORD=secret \
-  -e JWT_TOKEN=your-secret-key \
-  waline-rust
+  waline-server
 ```
 
 ### Docker Compose 示例
@@ -99,7 +60,7 @@ services:
     ports:
       - "8360:8360"
     environment:
-      - SQLITE_PATH=/data/waline.db
+      - DATABASE_URL="sqlite://./data/waline.sqlite"
       - JWT_TOKEN=change-me-to-a-random-string
       - SITE_URL=https://your-site.com
       - SITE_NAME=My Site
@@ -113,40 +74,11 @@ volumes:
 
 ## 数据库配置
 
-数据库类型根据环境变量自动检测，优先级：**PostgreSQL > MySQL > SQLite**。只需配置一种数据库即可。
-
-### SQLite（最简部署）
+数据库 **PostgreSQL、MySQL、SQLite**。只需配置一种数据库即可。
 
 | 环境变量 | 说明 | 默认值 |
 |---------|------|--------|
-| `SQLITE_PATH` | 数据库文件路径 | — (必填) |
-| `SQLITE_PREFIX` | 表名前缀 | `wl_` |
-
-### PostgreSQL
-
-| 环境变量 | 别名 | 说明 | 默认值 |
-|---------|------|------|--------|
-| `PG_DB` | `POSTGRES_DATABASE` | 数据库名 | — (必填) |
-| `PG_HOST` | `POSTGRES_HOST` | 主机地址 | — |
-| `PG_PORT` | `POSTGRES_PORT` | 端口 | — |
-| `PG_USER` | `POSTGRES_USER` | 用户名 | — |
-| `PG_PASSWORD` | `POSTGRES_PASSWORD` | 密码 | — |
-| `PG_PREFIX` | `POSTGRES_PREFIX` | 表名前缀 | `wl_` |
-| `PG_SSL` | `POSTGRES_SSL` | 启用 SSL | `false` |
-| `POSTGRES_URL` | — | 连接 URL（设置后忽略其他 PG_* 变量） | — |
-
-### MySQL
-
-| 环境变量 | 说明 | 默认值 |
-|---------|------|--------|
-| `MYSQL_DB` | 数据库名 | — (必填) |
-| `MYSQL_HOST` | 主机地址 | — |
-| `MYSQL_PORT` | 端口 | — |
-| `MYSQL_USER` | 用户名 | — |
-| `MYSQL_PASSWORD` | 密码 | — |
-| `MYSQL_PREFIX` | 表名前缀 | `wl_` |
-| `MYSQL_CHARSET` | 字符集 | — |
-| `MYSQL_SSL` | 启用 SSL | `false` |
+| `DATABASE_URL` | 数据库文件路径 | `sqlite://./data/waline.sqlite` (必填) |
 
 ### 自动建表
 
@@ -442,4 +374,4 @@ cargo clippy
 
 ## License
 
-MIT
+Apache-2.0

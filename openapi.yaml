@@ -1,0 +1,1096 @@
+openapi: "3.1.0"
+info:
+  title: Waline Server API
+  description: |
+    Waline 评论系统服务端 REST API，与原版 Node.js waline/packages/server 完全兼容。
+    所有 JSON 响应均包含 `errno`（0 表示成功）和 `errmsg` 字段。
+  version: "1.0.0"
+  license:
+    name: Apache-2.0
+
+servers:
+  - url: /api
+    description: API 前缀
+
+tags:
+  - name: comment
+    description: 评论
+  - name: article
+    description: 文章计数
+  - name: token
+    description: 认证 / JWT
+  - name: user
+    description: 用户管理
+  - name: oauth
+    description: OAuth 登录
+  - name: db
+    description: 数据库管理
+  - name: verification
+    description: 邮箱验证
+  - name: ui
+    description: 管理后台 SPA
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Reusable components
+# ─────────────────────────────────────────────────────────────────────────────
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    ApiOk:
+      type: object
+      properties:
+        errno:
+          type: integer
+          example: 0
+        errmsg:
+          type: string
+          example: ""
+
+    ApiError:
+      type: object
+      properties:
+        errno:
+          type: integer
+          example: 1000
+        errmsg:
+          type: string
+          example: "Error message"
+
+    Comment:
+      type: object
+      properties:
+        objectId:
+          type: integer
+        nick:
+          type: string
+        mail:
+          type: string
+          description: 仅管理员可见
+        link:
+          type: string
+        comment:
+          type: string
+          description: 已渲染的 HTML
+        orig:
+          type: string
+          description: 原始 Markdown（登录用户可见）
+        avatar:
+          type: string
+        browser:
+          type: string
+        os:
+          type: string
+        addr:
+          type: string
+          description: IP 归属地
+        ip:
+          type: string
+          description: 仅管理员可见
+        time:
+          type: integer
+          description: Unix 毫秒时间戳
+        insertedAt:
+          type: string
+          format: date-time
+        like:
+          type: integer
+        status:
+          type: string
+          enum: [approved, waiting, spam]
+        sticky:
+          type: boolean
+        url:
+          type: string
+        pid:
+          type: integer
+        rid:
+          type: integer
+        user_id:
+          type: integer
+        type:
+          type: string
+          description: 用户类型（登录用户）
+        label:
+          type: string
+        level:
+          type: integer
+          description: 用户等级（配置 LEVELS 时）
+        reply_user:
+          type: object
+          description: 被回复用户信息（子评论）
+          properties:
+            nick:
+              type: string
+            link:
+              type: string
+            avatar:
+              type: string
+        children:
+          type: array
+          items:
+            $ref: "#/components/schemas/Comment"
+
+    User:
+      type: object
+      properties:
+        objectId:
+          type: integer
+        display_name:
+          type: string
+        email:
+          type: string
+        type:
+          type: string
+          enum: [administrator, guest, banned]
+        label:
+          type: string
+        url:
+          type: string
+        avatar:
+          type: string
+        github:
+          type: string
+        twitter:
+          type: string
+        facebook:
+          type: string
+        google:
+          type: string
+        weibo:
+          type: string
+        qq:
+          type: string
+        oidc:
+          type: string
+        huawei:
+          type: string
+        2fa:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Counter:
+      type: object
+      description: 文章计数对象，字段名为 type 参数值
+      additionalProperties:
+        type: integer
+      example:
+        time: 42
+        reaction0: 5
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Paths
+# ─────────────────────────────────────────────────────────────────────────────
+paths:
+
+  # ── Comment ────────────────────────────────────────────────────────────────
+  /comment:
+    get:
+      tags: [comment]
+      summary: 获取评论
+      description: |
+        根据 `type` 参数分发到不同查询模式：
+        - 无 type / 默认：按页面路径获取评论列表（含子评论树）
+        - `type=count`：获取评论数
+        - `type=recent`：获取最近评论
+        - `type=list`：管理员获取全部评论（分页）
+      parameters:
+        - name: path
+          in: query
+          description: 页面路径（默认模式必填）
+          schema:
+            type: string
+        - name: url
+          in: query
+          description: 同 path（兼容旧版）
+          schema:
+            type: string
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [count, recent, list]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: sortBy
+          in: query
+          description: 排序方式
+          schema:
+            type: string
+            enum: [insertedAt_desc, insertedAt_asc, like_desc]
+            default: insertedAt_desc
+        - name: count
+          in: query
+          description: recent 模式返回条数
+          schema:
+            type: integer
+            default: 10
+        - name: owner
+          in: query
+          description: list 模式过滤：mine
+          schema:
+            type: string
+        - name: status
+          in: query
+          description: list 模式过滤状态
+          schema:
+            type: string
+            enum: [approved, waiting, spam]
+        - name: keyword
+          in: query
+          description: list 模式关键词搜索
+          schema:
+            type: string
+        - name: lang
+          in: query
+          schema:
+            type: string
+      security:
+        - {}
+        - bearerAuth: []
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiOk"
+                  - type: object
+                    properties:
+                      data:
+                        oneOf:
+                          - type: array
+                            items:
+                              $ref: "#/components/schemas/Comment"
+                          - type: integer
+                          - type: object
+                            properties:
+                              page:
+                                type: integer
+                              totalPages:
+                                type: integer
+                              pageSize:
+                                type: integer
+                              count:
+                                type: integer
+                              spamCount:
+                                type: integer
+                              waitingCount:
+                                type: integer
+                              data:
+                                type: array
+                                items:
+                                  $ref: "#/components/schemas/Comment"
+
+    post:
+      tags: [comment]
+      summary: 提交新评论
+      security:
+        - {}
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [comment, url]
+              properties:
+                comment:
+                  type: string
+                nick:
+                  type: string
+                mail:
+                  type: string
+                link:
+                  type: string
+                url:
+                  type: string
+                ua:
+                  type: string
+                pid:
+                  type: integer
+                rid:
+                  type: integer
+                at:
+                  type: string
+                recaptchaV3:
+                  type: string
+                turnstile:
+                  type: string
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiOk"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Comment"
+
+  /comment/{id}:
+    put:
+      tags: [comment]
+      summary: 更新评论（管理员或点赞）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      security:
+        - {}
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                comment:
+                  type: string
+                nick:
+                  type: string
+                mail:
+                  type: string
+                link:
+                  type: string
+                url:
+                  type: string
+                ua:
+                  type: string
+                status:
+                  type: string
+                  enum: [approved, waiting, spam]
+                sticky:
+                  type: boolean
+                like:
+                  type: boolean
+                  description: true=点赞 false=取消点赞
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiOk"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/Comment"
+
+    delete:
+      tags: [comment]
+      summary: 删除评论（管理员或评论作者）
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiOk"
+
+  /comment/rss:
+    get:
+      tags: [comment]
+      summary: 评论 RSS 订阅
+      parameters:
+        - name: path
+          in: query
+          description: 按页面路径过滤
+          schema:
+            type: string
+        - name: email
+          in: query
+          description: 按邮箱过滤（获取该用户评论的回复）
+          schema:
+            type: string
+        - name: user_id
+          in: query
+          description: 按用户 ID 过滤
+          schema:
+            type: integer
+        - name: count
+          in: query
+          description: 返回条数（1-50）
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: RSS XML
+          content:
+            application/rss+xml:
+              schema:
+                type: string
+
+  # ── Article ────────────────────────────────────────────────────────────────
+  /article:
+    get:
+      tags: [article]
+      summary: 获取文章计数（访问量/表情）
+      parameters:
+        - name: path
+          in: query
+          description: 页面路径，逗号分隔多个
+          required: true
+          schema:
+            type: string
+        - name: type
+          in: query
+          description: 计数类型，逗号分隔，如 time,reaction0
+          schema:
+            type: string
+            default: time
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiOk"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Counter"
+
+    post:
+      tags: [article]
+      summary: 更新文章计数
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path]
+              properties:
+                path:
+                  type: string
+                type:
+                  type: string
+                  default: time
+                  description: 计数字段（time / reaction0-8）
+                action:
+                  type: string
+                  enum: [inc, desc]
+                  default: inc
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiOk"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Counter"
+
+  # ── Token / Auth ───────────────────────────────────────────────────────────
+  /token:
+    get:
+      tags: [token]
+      summary: 获取当前登录用户信息
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiOk"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/User"
+
+    post:
+      tags: [token]
+      summary: 登录（邮箱 + 密码）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+                code:
+                  type: string
+                  description: 2FA TOTP 验证码
+      responses:
+        "200":
+          description: 成功，返回用户信息及 JWT token
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiOk"
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: "#/components/schemas/User"
+                          - type: object
+                            properties:
+                              token:
+                                type: string
+
+    delete:
+      tags: [token]
+      summary: 登出
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiOk"
+
+  /token/2fa:
+    get:
+      tags: [token]
+      summary: 获取 2FA 设置（QR 码 URL）
+      description: |
+        - 已登录：返回当前用户的 TOTP secret 和 otpauth_url
+        - 未登录 + email 参数：返回该邮箱是否已启用 2FA
+      parameters:
+        - name: email
+          in: query
+          schema:
+            type: string
+      security:
+        - {}
+        - bearerAuth: []
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiOk"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          enable:
+                            type: boolean
+                          otpauth_url:
+                            type: string
+                          secret:
+                            type: string
+
+    post:
+      tags: [token]
+      summary: 启用 2FA
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [secret, code]
+              properties:
+                secret:
+                  type: string
+                code:
+                  type: string
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiOk"
+
+  # ── User ───────────────────────────────────────────────────────────────────
+  /user:
+    get:
+      tags: [user]
+      summary: 获取用户列表
+      description: |
+        - 管理员：分页用户列表，或按 email 查询单个用户
+        - 普通用户/未登录：按评论数排名的用户列表
+      parameters:
+        - name: email
+          in: query
+          description: 管理员按邮箱查询单个用户
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 10
+      security:
+        - {}
+        - bearerAuth: []
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiOk"
+                  - type: object
+                    properties:
+                      data:
+                        oneOf:
+                          - $ref: "#/components/schemas/User"
+                          - type: object
+                            properties:
+                              page:
+                                type: integer
+                              totalPages:
+                                type: integer
+                              pageSize:
+                                type: integer
+                              data:
+                                type: array
+                                items:
+                                  $ref: "#/components/schemas/User"
+                          - type: array
+                            description: 公开用户排名
+                            items:
+                              type: object
+                              properties:
+                                nick:
+                                  type: string
+                                link:
+                                  type: string
+                                avatar:
+                                  type: string
+                                count:
+                                  type: integer
+                                level:
+                                  type: integer
+
+    post:
+      tags: [user]
+      summary: 注册用户（第一个用户自动成为管理员）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                display_name:
+                  type: string
+                email:
+                  type: string
+                password:
+                  type: string
+                url:
+                  type: string
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiOk"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          verify:
+                            type: boolean
+                            description: true 表示需要邮箱验证
+
+    put:
+      tags: [user]
+      summary: 更新当前用户资料
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                display_name:
+                  type: string
+                email:
+                  type: string
+                label:
+                  type: string
+                url:
+                  type: string
+                password:
+                  type: string
+                avatar:
+                  type: string
+                2fa:
+                  type: string
+                github:
+                  type: string
+                twitter:
+                  type: string
+                facebook:
+                  type: string
+                google:
+                  type: string
+                weibo:
+                  type: string
+                qq:
+                  type: string
+                oidc:
+                  type: string
+                huawei:
+                  type: string
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiOk"
+
+  /user/password:
+    put:
+      tags: [user]
+      summary: 发送密码重置邮件
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiOk"
+
+  /user/{id}:
+    put:
+      tags: [user]
+      summary: 管理员设置用户类型
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type]
+              properties:
+                type:
+                  type: string
+                  enum: [administrator, guest, banned]
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiOk"
+
+    delete:
+      tags: [user]
+      summary: 管理员删除/封禁用户
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiOk"
+
+  # ── OAuth ──────────────────────────────────────────────────────────────────
+  /oauth:
+    get:
+      tags: [oauth]
+      summary: OAuth 登录跳转
+      description: 重定向到 OAuth 服务商授权页面
+      parameters:
+        - name: type
+          in: query
+          required: true
+          description: OAuth 类型（github / google / twitter / facebook / weibo / qq / oidc / huawei）
+          schema:
+            type: string
+        - name: redirect
+          in: query
+          description: 登录成功后跳转地址
+          schema:
+            type: string
+      security:
+        - {}
+        - bearerAuth: []
+      responses:
+        "302":
+          description: 重定向到 OAuth 服务商授权页面
+
+  /oauth/callback:
+    get:
+      tags: [oauth]
+      summary: OAuth 回调处理
+      description: 处理 OAuth 服务商回调，绑定或创建账号后重定向
+      parameters:
+        - name: type
+          in: query
+          required: true
+          description: OAuth 类型
+          schema:
+            type: string
+        - name: code
+          in: query
+          required: true
+          description: OAuth 授权码
+          schema:
+            type: string
+        - name: state
+          in: query
+          description: OAuth state 参数
+          schema:
+            type: string
+      security:
+        - {}
+        - bearerAuth: []
+      responses:
+        "302":
+          description: 重定向到登录成功后的目标页面（带 token 参数）
+        "200":
+          description: 成功（无 redirect 时）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiOk"
+
+  # ── DB Management ──────────────────────────────────────────────────────────
+  /db:
+    get:
+      tags: [db]
+      summary: 导出全部数据
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiOk"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          type:
+                            type: string
+                            example: waline
+                          version:
+                            type: integer
+                            example: 1
+                          time:
+                            type: integer
+                          tables:
+                            type: array
+                            items:
+                              type: string
+                          data:
+                            type: object
+                            properties:
+                              Comment:
+                                type: array
+                                items:
+                                  type: object
+                              Counter:
+                                type: array
+                                items:
+                                  type: object
+                              Users:
+                                type: array
+                                items:
+                                  type: object
+
+    post:
+      tags: [db]
+      summary: 导入单条记录
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: table
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [Comment, Counter, Users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiOk"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          objectId:
+                            type: integer
+
+    put:
+      tags: [db]
+      summary: 更新单条记录
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: table
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [Comment, Counter, Users]
+        - name: objectId
+          in: query
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiOk"
+
+    delete:
+      tags: [db]
+      summary: 清空指定表
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: table
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [Comment, Counter, Users]
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiOk"
+
+  # ── Verification ───────────────────────────────────────────────────────────
+  /verification:
+    get:
+      tags: [verification]
+      summary: 邮箱验证（点击注册确认邮件中的链接）
+      parameters:
+        - name: email
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "302":
+          description: 验证成功，重定向到 /ui/login
+        "400":
+          description: Token 无效或已过期

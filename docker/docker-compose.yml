@@ -1,0 +1,18 @@
+services:
+  waline:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8360:8360"
+    environment:
+      - DATABASE_URL=sqlite://./data/waline.sqlite?mode=rwc
+      - JWT_TOKEN=change-me-to-a-random-string
+      - SITE_URL=https://your-site.com
+      - SITE_NAME=My Site
+    volumes:
+      - waline-data:/data
+    restart: unless-stopped
+
+volumes:
+  waline-data:
