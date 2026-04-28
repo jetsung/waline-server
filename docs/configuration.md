@@ -205,10 +205,42 @@ LIKE_INC_MAX=1
 # Webhook
 WEBHOOK=https://your-webhook-url
 
-# IP 归属地数据库
-IP2REGION_DB=/path/to/ip2region.db
-IP2REGION_DB_V4=/path/to/ipv4.db
-IP2REGION_DB_V6=/path/to/ipv6.db
+# IP 归属地数据库（ip2region xdb 格式）
+# 数据库下载地址：https://github.com/lionsoul2014/ip2region/tree/master/data
+IP2REGION_DB=/path/to/ip2region.xdb
+IP2REGION_DB_V4=/path/to/ip2region.xdb
+IP2REGION_DB_V6=/path/to/ip2region.xdb
+```
+
+## IP 归属地查询
+
+Waline 支持通过 ip2region 数据库查询评论者的 IP 归属地。
+
+### 数据库下载
+
+从 [ip2region data 目录](https://github.com/lionsoul2014/ip2region/tree/master/data) 下载 xdb 格式的数据库文件：
+
+- `ip2region.xdb` - IPv4 归属地数据库
+- `ip2region.xdb` - IPv6 归属地数据库（同名但内容不同）
+
+### 配置方式
+
+```bash
+# IPv4 数据库（推荐）
+IP2REGION_DB_V4=/path/to/ip2region.xdb
+
+# 或使用通用配置（IP2REGION_DB_V4 优先级更高）
+IP2REGION_DB=/path/to/ip2region.xdb
+
+# IPv6 数据库（可选）
+IP2REGION_DB_V6=/path/to/ip2region.xdb
+```
+
+### 禁用 IP 归属地记录
+
+```bash
+# 禁止记录 IP 归属地
+DISABLE_REGION=true
 ```
 
 ## 完整配置示例

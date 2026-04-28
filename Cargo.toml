@@ -72,6 +72,8 @@ once_cell = "1"
 urlencoding = "2"
 time = { version = "0.3", features = ["local-offset"] }
 futures-util = "0.3"
+async-trait = "0.1"
+thiserror = "2"
 
 [profile.release]
 lto = true

@@ -24,6 +24,25 @@ Waline Rust 支持 3 种数据库后端，通过 SQLx 实现数据库无关性�
 DATABASE_URL=sqlite://./data/waline.sqlite
 ```
 
+#### Docker 环境中的权限配置
+
+使用 SQLite 时，数据库文件所在目录必须对容器内用户可写：
+
+- **Docker volume**：自动处理权限，无需额外配置
+- **宿主机目录挂载**：需设置正确权限
+  ```bash
+  sudo chown -R 65532:65532 /path/to/data
+  sudo chmod -R 755 /path/to/data
+  ```
+
+数据库文件权限应为 `644`，目录权限应为 `755`。
+
+Docker 部署时，`DATABASE_URL` 应使用绝对路径：
+
+```bash
+DATABASE_URL=sqlite:///app/data/waline.sqlite?mode=rwc
+```
+
 ### MySQL
 
 ```bash

@@ -44,11 +44,17 @@ docker build -t waline-rust .
 
 docker run -d \
   -p 8360:8360 \
-  -e DATABASE_URL="sqlite://./data/waline.sqlite" \
+  -e DATABASE_URL="sqlite:///app/data/waline.sqlite?mode=rwc" \
   -e JWT_TOKEN=your-secret-key \
-  -v waline-data:/data \
+  -v waline-data:/app/data \
   waline-server
 ```
+
+> **注意**：使用 SQLite 时，数据库文件所在目录必须对容器内用户（UID 65532）可写。如果挂载宿主机目录，需设置正确权限：
+> ```bash
+> sudo chown -R 65532:65532 /path/to/data
+> sudo chmod -R 755 /path/to/data
+> ```
 
 ### Docker Compose 示例
 
@@ -60,12 +66,12 @@ services:
     ports:
       - "8360:8360"
     environment:
-      - DATABASE_URL="sqlite://./data/waline.sqlite"
+      - DATABASE_URL=sqlite:///app/data/waline.sqlite?mode=rwc
       - JWT_TOKEN=change-me-to-a-random-string
       - SITE_URL=https://your-site.com
       - SITE_NAME=My Site
     volumes:
-      - waline-data:/data
+      - waline-data:/app/data
     restart: unless-stopped
 
 volumes:
@@ -79,6 +85,19 @@ volumes:
 | 环境变量 | 说明 | 默认值 |
 |---------|------|--------|
 | `DATABASE_URL` | 数据库文件路径 | `sqlite://./data/waline.sqlite` (必填) |
+
+### SQLite 权限配置
+
+使用 SQLite 时，数据库文件所在目录必须对容器内用户可写：
+
+- **Docker volume**：自动处理权限，无需额外配置
+- **宿主机目录挂载**：需设置正确权限
+  ```bash
+  sudo chown -R 65532:65532 /path/to/data
+  sudo chmod -R 755 /path/to/data
+  ```
+
+数据库文件权限应为 `644`，目录权限应为 `755`。
 
 ### 自动建表
 
@@ -209,9 +228,29 @@ volumes:
 | `LEVELS` | 用户等级阈值，逗号分隔 | — |
 | `LIKE_INC_MAX` | 单次点赞最大增量 | `1` |
 | `WEBHOOK` | Webhook URL，评论时 POST 通知 | — |
-| `IP2REGION_DB` | IP 归属地数据库路径 | — |
-| `IP2REGION_DB_V4` | IPv4 归属地数据库路径 | — |
+| `IP2REGION_DB` | IP 归属地数据库路径（ip2region xdb 格式） | — |
+| `IP2REGION_DB_V4` | IPv4 归属地数据库路径（优先级高于 IP2REGION_DB） | — |
 | `IP2REGION_DB_V6` | IPv6 归属地数据库路径 | — |
+
+### IP 归属地查询
+
+支持通过 [ip2region](https://github.com/lionsoul2014/ip2region) 数据库查询评论者的 IP 归属地。
+
+**数据库下载**：从 [ip2region data 目录](https://github.com/lionsoul2014/ip2region/tree/master/data) 下载 xdb 格式数据库文件。
+
+**配置示例**：
+```bash
+# IPv4 数据库（推荐）
+IP2REGION_DB_V4=/path/to/ip2region.xdb
+
+# 或通用配置（IP2REGION_DB_V4 优先级更高）
+IP2REGION_DB=/path/to/ip2region.xdb
+```
+
+**禁用归属地记录**：
+```bash
+DISABLE_REGION=true
+```
 
 ## API 接口
 

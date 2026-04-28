@@ -155,7 +155,65 @@ pub struct Config {
     pub debug: bool,
 }
 
+/// GeoIP configuration
+#[derive(Debug, Clone, Deserialize)]
+pub struct GeoIpConfig {
+    /// Enable GeoIP lookup
+    #[serde(default = "default_false")]
+    pub enabled: bool,
+    /// GeoIP type (currently only "ip2region" supported)
+    #[serde(default = "default_geoip_type")]
+    pub geoip_type: GeoIpType,
+    /// ip2region configuration
+    pub ip2region: Option<Ip2RegionConfig>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub enum GeoIpType {
+    Ip2region,
+}
+
+fn default_geoip_type() -> GeoIpType {
+    GeoIpType::Ip2region
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Ip2RegionConfig {
+    /// Database file path
+    pub path: String,
+    /// Cache mode: "vector" (default), "full"/"memory", or "none"
+    #[serde(default = "default_ip2region_mode")]
+    pub mode: String,
+}
+
+fn default_ip2region_mode() -> String {
+    "vector".to_string()
+}
+
 impl Config {
+    /// Build GeoIpConfig from environment variables
+    pub fn geoip_config(&self) -> GeoIpConfig {
+        // Priority: IP2REGION_DB_V4 > IP2REGION_DB
+        let db_path = self.ip2region_db_v4.as_ref()
+            .or(self.ip2region_db.as_ref());
+
+        match db_path {
+            Some(path) => GeoIpConfig {
+                enabled: !self.disable_region,
+                geoip_type: GeoIpType::Ip2region,
+                ip2region: Some(Ip2RegionConfig {
+                    path: path.clone(),
+                    mode: "vector".to_string(),
+                }),
+            },
+            None => GeoIpConfig {
+                enabled: false,
+                geoip_type: GeoIpType::Ip2region,
+                ip2region: None,
+            },
+        }
+    }
+
     pub fn load() -> Result<Self, envy::Error> {
         dotenvy::dotenv_override().ok();
         

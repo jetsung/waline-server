@@ -2,6 +2,7 @@ mod app;
 mod config;
 mod db;
 mod error;
+mod geoip;
 mod handlers;
 mod locales;
 mod middleware;

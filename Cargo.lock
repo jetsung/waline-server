@@ -4235,6 +4235,7 @@ name = "waline-server"
 version = "0.1.0"
 dependencies = [
  "ammonia",
+ "async-trait",
  "axum",
  "axum-extra",
  "base64",
@@ -4256,6 +4257,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.11.0",
+ "thiserror 2.0.18",
  "time",
  "tokio",
  "toml",

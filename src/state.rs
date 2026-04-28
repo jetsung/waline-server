@@ -1,27 +1,39 @@
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, OnceLock},
     time::{Duration, Instant},
 };
 
-use crate::{config::Config, db::Db};
+use crate::{config::Config, db::Db, geoip::GeoIp};
+
+static GLOBAL_GEOIP: OnceLock<Option<Arc<dyn GeoIp>>> = OnceLock::new();
 
 #[derive(Clone)]
 pub struct AppState {
     pub db: Db,
     pub config: Arc<Config>,
     pub rate_limiter: Arc<RateLimiter>,
+    pub geoip: Option<Arc<dyn GeoIp>>,
 }
 
 impl AppState {
-    pub fn new(db: Db, config: Config) -> Self {
+    pub fn new(db: Db, config: Config, geoip: Option<Arc<dyn GeoIp>>) -> Self {
+        // Store geoip globally for sync access
+        let _ = GLOBAL_GEOIP.set(geoip.clone());
+        
         let ipqps = config.ipqps;
         Self {
             db,
             rate_limiter: Arc::new(RateLimiter::new(ipqps)),
             config: Arc::new(config),
+            geoip,
         }
     }
+}
+
+/// Get the global GeoIP instance
+pub fn get_geoip() -> Option<Arc<dyn GeoIp>> {
+    GLOBAL_GEOIP.get().and_then(|g| g.clone())
 }
 
 pub struct RateLimiter {
