@@ -5,7 +5,7 @@ use crate::{
     db::Db,
     error::AppError,
     models::{comment, user},
-    utils::{avatar, ip, ua},
+    utils::{avatar, ip, ua, markdown},
 };
 
 /// Build the public-facing comment JSON (matches Node formatCmt).
@@ -25,7 +25,7 @@ pub fn format_comment_with_opts(
     matched_user: Option<&user::Model>,
     config: &Config,
     is_admin: bool,
-    is_logged_in: bool,
+    _is_logged_in: bool,
     level: Option<i32>,
 ) -> Value {
     let (browser, os) = if config.disable_useragent {
@@ -48,9 +48,13 @@ pub fn format_comment_with_opts(
 
     let time = comment.time_ms();
 
+    // orig: raw markdown (stored in DB), comment: rendered HTML
+    let orig = comment.comment.clone();
+    let rendered = markdown::render(orig.as_deref().unwrap_or(""));
+
     let mut v = json!({
         "objectId": comment.id,
-        "comment": comment.comment,
+        "comment": rendered,
         "insertedAt": comment.inserted_at,
         "nick": comment.nick,
         "link": comment.link,
@@ -68,10 +72,8 @@ pub fn format_comment_with_opts(
         "user_id": comment.user_id,
     });
 
-    // orig: raw markdown visible to logged-in users
-    if is_logged_in || is_admin {
-        v["orig"] = json!(comment.comment);
-    }
+    // orig: raw markdown (always visible - user's original input)
+    v["orig"] = json!(orig);
 
     if let Some(u) = matched_user {
         v["type"] = json!(u.user_type);

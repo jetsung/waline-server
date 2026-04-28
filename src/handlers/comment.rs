@@ -16,7 +16,7 @@ use crate::{
     models::comment,
     services::{comment as svc, notify::{self, NotifyContext}},
     state::AppState,
-    utils::{extract_ip, extract_token, jwt, markdown, spam, ua},
+    utils::{extract_ip, extract_token, jwt, spam, ua},
 };
 
 // ── Query / Body types ────────────────────────────────────────────────────────
@@ -457,7 +457,6 @@ pub async fn post_comment(
         None
     };
     let mut resp = svc::format_comment(&comment_model, user.as_ref(), &state.config, is_admin);
-    resp["comment"] = json!(markdown::render(&body.comment));
     let (browser, os) = ua::parse(body.ua.as_deref().unwrap_or(""));
     resp["browser"] = json!(browser);
     resp["os"] = json!(os);
