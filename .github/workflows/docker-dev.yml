@@ -5,6 +5,7 @@ on:
     branches:
       - dev*
     paths:
+      - "src"
       - "docker/Dockerfile"
       - ".github/workflows/docker-dev.yml"
 
