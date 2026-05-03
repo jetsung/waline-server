@@ -1,5 +1,4 @@
 use axum::{
-    Json,
     extract::{Query, State},
     http::HeaderMap,
     response::{IntoResponse, Redirect, Response},
@@ -8,7 +7,7 @@ use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::{models::user, services::user as svc, state::AppState, utils::jwt};
+use crate::{models::user, response::Json as JsonResponse, services::user as svc, state::AppState, utils::jwt};
 
 #[derive(Debug, Deserialize)]
 pub struct OAuthQuery {
@@ -93,7 +92,7 @@ pub async fn oauth_callback(
 ) -> Response {
     let code = match &q.code {
         Some(c) if !c.is_empty() => c,
-        _ => return Json(json!({ "errno": 1, "errmsg": "Missing code" })).into_response(),
+        _ => return JsonResponse(json!({ "errno": 1, "errmsg": "Missing code" })).into_response(),
     };
     
     handle_oauth_callback(&headers, &state, code, &q).await
@@ -133,20 +132,20 @@ async fn handle_oauth_callback(
                 Ok(u) => u,
                 Err(e) => {
                     tracing::error!("Failed to parse OAuth user: {}", e);
-                    return Json(json!({ "errno": 1, "errmsg": "OAuth fetch failed" })).into_response();
+                    return JsonResponse(json!({ "errno": 1, "errmsg": "OAuth fetch failed" })).into_response();
                 }
             }
         }
         Err(e) => {
             tracing::error!("OAuth request failed: {}", e);
-            return Json(json!({ "errno": 1, "errmsg": "OAuth request failed" })).into_response();
+            return JsonResponse(json!({ "errno": 1, "errmsg": "OAuth request failed" })).into_response();
         }
     };
 
     tracing::info!("OAuth user: id={}, name={:?}", oauth_user.id, oauth_user.name);
 
     if oauth_user.id.is_empty() {
-        return Json(json!({ "errno": 1, "errmsg": "Invalid OAuth user" })).into_response();
+        return JsonResponse(json!({ "errno": 1, "errmsg": "Invalid OAuth user" })).into_response();
     }
 
     // 1. Check if social account already linked to a user
@@ -161,7 +160,7 @@ async fn handle_oauth_callback(
         "huawei" => user::Column::Huawei,
         _ => {
             tracing::error!("Unknown OAuth type: {}", oauth_type);
-            return Json(json!({ "errno": 1, "errmsg": "Unknown OAuth type" })).into_response();
+            return JsonResponse(json!({ "errno": 1, "errmsg": "Unknown OAuth type" })).into_response();
         }
     };
 

@@ -89,7 +89,6 @@ pub struct Config {
     // IP region
     pub ip2region_db: Option<String>,
     pub ip2region_db_v4: Option<String>,
-    pub ip2region_db_v6: Option<String>,
 
     // SMTP
     pub smtp_service: Option<String>,
@@ -136,10 +135,7 @@ pub struct Config {
     pub gravatar_str: Option<String>,
 
     // Markdown
-    pub markdown_highlight: Option<String>,
-    pub markdown_emoji: Option<String>,
-    pub markdown_sub: Option<String>,
-    pub markdown_sup: Option<String>,
+    #[allow(dead_code)]
     #[serde(default = "default_markdown_tex")]
     pub markdown_tex: String,
 
@@ -241,22 +237,6 @@ impl Config {
 
     pub fn has_smtp(&self) -> bool {
         self.smtp_host.is_some() || self.smtp_service.is_some()
-    }
-
-    pub fn markdown_highlight_enabled(&self) -> bool {
-        self.markdown_highlight.as_deref() != Some("false")
-    }
-
-    pub fn markdown_emoji_enabled(&self) -> bool {
-        self.markdown_emoji.as_deref() != Some("false")
-    }
-
-    pub fn markdown_sub_enabled(&self) -> bool {
-        self.markdown_sub.as_deref() != Some("false")
-    }
-
-    pub fn markdown_sup_enabled(&self) -> bool {
-        self.markdown_sup.as_deref() != Some("false")
     }
 
     pub fn avatar_proxy_url(&self) -> Option<&str> {

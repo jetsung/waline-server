@@ -2,7 +2,7 @@ use axum::{Json, extract::{Query, State}, response::IntoResponse};
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::{services::article, state::AppState};
+use crate::{response::Json as JsonResponse, services::article, state::AppState};
 
 #[derive(Debug, Deserialize)]
 pub struct ArticleGetQuery {
@@ -36,7 +36,7 @@ pub async fn get_article(
         .unwrap_or_else(|| vec!["time".to_string()]);
 
     match article::get_counters(&state.db, &paths, &types).await {
-        Ok(data) => Json(json!({ "errno": 0, "errmsg": "", "data": data })).into_response(),
+        Ok(data) => JsonResponse(json!({ "errno": 0, "errmsg": "", "data": data })).into_response(),
         Err(e) => e.into_response(),
     }
 }
@@ -47,7 +47,7 @@ pub async fn post_article(
 ) -> impl IntoResponse {
     let path = body.path.as_deref().unwrap_or("");
     match article::update_counter(&state.db, path, &body.field, &body.action).await {
-        Ok(data) => Json(json!({ "errno": 0, "errmsg": "", "data": data })).into_response(),
+        Ok(data) => JsonResponse(json!({ "errno": 0, "errmsg": "", "data": data })).into_response(),
         Err(e) => e.into_response(),
     }
 }

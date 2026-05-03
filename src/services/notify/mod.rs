@@ -15,8 +15,10 @@ use serde_json::{Value, json};
 pub struct NotifyContext<'a> {
     pub config: &'a Config,
     pub comment: &'a comment::Model,
+    #[allow(dead_code)]
     pub comment_user: Option<&'a user::Model>,
     pub parent: Option<&'a comment::Model>,
+    #[allow(dead_code)]
     pub parent_user: Option<&'a user::Model>,
     pub raw_comment: &'a str,
 }

@@ -10,16 +10,10 @@ use crate::state::AppState;
 
 /// CORS middleware — permissive (mirrors waline-mini behavior)
 pub async fn cors(req: Request, next: Next) -> Response {
-    let origin = req
-        .headers()
-        .get(header::ORIGIN)
-        .cloned()
-        .unwrap_or_else(|| HeaderValue::from_static("*"));
-
     if req.method() == Method::OPTIONS {
         return Response::builder()
             .status(StatusCode::NO_CONTENT)
-            .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, origin)
+            .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
             .header(header::ACCESS_CONTROL_ALLOW_METHODS, "GET,POST,PUT,DELETE,OPTIONS")
             .header(
                 header::ACCESS_CONTROL_ALLOW_HEADERS,
@@ -31,11 +25,7 @@ pub async fn cors(req: Request, next: Next) -> Response {
     }
 
     let mut resp = next.run(req).await;
-    resp.headers_mut().insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, origin);
-    resp.headers_mut().insert(
-        header::ACCESS_CONTROL_ALLOW_METHODS,
-        HeaderValue::from_static("GET,POST,PUT,DELETE,OPTIONS"),
-    );
+    resp.headers_mut().insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, HeaderValue::from_static("*"));
     resp
 }
 

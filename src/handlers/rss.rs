@@ -50,9 +50,9 @@ pub async fn rss_feed(State(state): State<AppState>, Query(q): Query<RssQuery>) 
                 "{nick} commented{}",
                 c.url.as_deref().map(|u| format!(" on {u}")).unwrap_or_default()
             );
-            let pub_date = c.inserted_at.as_deref().unwrap_or("");
+            let pub_date = format_rfc2822(c.inserted_at.as_deref().unwrap_or(""));
             format!(
-                "    <item>\n      <title><![CDATA[{title}]]></title>\n      <description><![CDATA[{description}]]></description>\n      <link>{link}</link>\n      <guid>{}</guid>\n      <pubDate>{pub_date}</pubDate>\n    </item>",
+                "        <item>\n            <title><![CDATA[{title}]]></title>\n            <description><![CDATA[{description}]]></description>\n            <link>{link}</link>\n            <guid isPermaLink=\"false\">{}</guid>\n            <pubDate>{pub_date}</pubDate>\n        </item>",
                 c.id
             )
         })
@@ -75,9 +75,9 @@ pub async fn rss_feed(State(state): State<AppState>, Query(q): Query<RssQuery>) 
         )
     };
 
-    let now = chrono::Utc::now().to_rfc2822();
+    let now = format_rfc2822(&chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string());
     let xml = format!(
-        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<rss version=\"2.0\">\n  <channel>\n    <title>{title}</title>\n    <link>{site_url}</link>\n    <description>{desc}</description>\n    <pubDate>{now}</pubDate>\n{}\n  </channel>\n</rss>",
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<rss xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:content=\"http://purl.org/rss/1.0/modules/content/\" xmlns:atom=\"http://www.w3.org/2005/Atom\" version=\"2.0\">\n    <channel>\n        <title><![CDATA[{title}]]></title>\n        <description><![CDATA[{desc}]]></description>\n        <link>{site_url}</link>\n        <generator>RSS for Rust</generator>\n        <lastBuildDate>{now}</lastBuildDate>\n        <pubDate>{now}</pubDate>\n{}\n    </channel>\n</rss>",
         items.join("\n")
     );
 
@@ -87,6 +87,20 @@ pub async fn rss_feed(State(state): State<AppState>, Query(q): Query<RssQuery>) 
         xml,
     )
         .into_response()
+}
+
+fn format_rfc2822(datetime_str: &str) -> String {
+    use chrono::{DateTime, NaiveDateTime, Utc, TimeZone};
+
+    let dt = if let Ok(ndt) = NaiveDateTime::parse_from_str(datetime_str, "%Y-%m-%d %H:%M:%S") {
+        Utc.from_utc_datetime(&ndt)
+    } else if let Ok(dt) = DateTime::parse_from_rfc3339(datetime_str) {
+        dt.with_timezone(&Utc)
+    } else {
+        Utc::now()
+    };
+
+    dt.format("%a, %d %b %Y %H:%M:%S GMT").to_string()
 }
 
 async fn fetch_comments(

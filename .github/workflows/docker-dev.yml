@@ -5,9 +5,9 @@ on:
     branches:
       - dev*
     paths:
-      - "src/*"
       - "docker/Dockerfile"
       - ".github/workflows/docker-dev.yml"
+      - "src/**"
 
 env:
   GHCR_SLUG: ghcr.io/${{ github.repository }}

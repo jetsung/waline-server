@@ -7,7 +7,7 @@ use axum::{
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::{services::db as svc, state::AppState, utils::jwt};
+use crate::{response::Json as JsonResponse, services::db as svc, state::AppState, utils::jwt};
 
 fn require_admin(headers: &HeaderMap, state: &AppState) -> Result<i64, ()> {
     let token = crate::utils::extract_token(headers).ok_or(())?;
@@ -32,10 +32,10 @@ pub struct TableQuery {
 // GET /api/db — export all data
 pub async fn export_db(headers: HeaderMap, State(state): State<AppState>) -> impl IntoResponse {
     if !check_admin(&headers, &state).await {
-        return Json(json!({ "errno": 401, "errmsg": "Unauthorized" })).into_response();
+        return JsonResponse(json!({ "errno": 401, "errmsg": "Unauthorized" })).into_response();
     }
     match svc::export(&state.db).await {
-        Ok(data) => Json(json!({ "errno": 0, "errmsg": "", "data": data })).into_response(),
+        Ok(data) => JsonResponse(json!({ "errno": 0, "errmsg": "", "data": data })).into_response(),
         Err(e) => e.into_response(),
     }
 }
@@ -48,14 +48,14 @@ pub async fn import_record(
     Json(mut body): Json<Value>,
 ) -> impl IntoResponse {
     if !check_admin(&headers, &state).await {
-        return Json(json!({ "errno": 401, "errmsg": "Unauthorized" })).into_response();
+        return JsonResponse(json!({ "errno": 401, "errmsg": "Unauthorized" })).into_response();
     }
     let table = q.table.as_deref().unwrap_or("");
     // Remove objectId before insert
     if let Some(obj) = body.as_object_mut() { obj.remove("objectId"); }
 
     match svc::insert_record(&state.db, table, &body).await {
-        Ok(id) => Json(json!({ "errno": 0, "errmsg": "", "data": { "objectId": id } })).into_response(),
+        Ok(id) => JsonResponse(json!({ "errno": 0, "errmsg": "", "data": { "objectId": id } })).into_response(),
         Err(e) => e.into_response(),
     }
 }
@@ -68,12 +68,12 @@ pub async fn update_record(
     Json(mut body): Json<Value>,
 ) -> impl IntoResponse {
     if !check_admin(&headers, &state).await {
-        return Json(json!({ "errno": 401, "errmsg": "Unauthorized" })).into_response();
+        return JsonResponse(json!({ "errno": 401, "errmsg": "Unauthorized" })).into_response();
     }
     let table = q.table.as_deref().unwrap_or("");
     let object_id = match q.object_id {
         Some(id) => id,
-        None => return Json(json!({ "errno": 1000, "errmsg": "objectId required" })).into_response(),
+        None => return JsonResponse(json!({ "errno": 1000, "errmsg": "objectId required" })).into_response(),
     };
     if let Some(obj) = body.as_object_mut() {
         obj.remove("objectId");
@@ -81,7 +81,7 @@ pub async fn update_record(
         obj.remove("updatedAt");
     }
     match svc::update_record(&state.db, table, object_id, &body).await {
-        Ok(_) => Json(json!({ "errno": 0, "errmsg": "" })).into_response(),
+        Ok(_) => JsonResponse(json!({ "errno": 0, "errmsg": "" })).into_response(),
         Err(e) => e.into_response(),
     }
 }
@@ -93,11 +93,11 @@ pub async fn delete_db(
     Query(q): Query<TableQuery>,
 ) -> impl IntoResponse {
     if !check_admin(&headers, &state).await {
-        return Json(json!({ "errno": 401, "errmsg": "Unauthorized" })).into_response();
+        return JsonResponse(json!({ "errno": 401, "errmsg": "Unauthorized" })).into_response();
     }
     let table = q.table.as_deref().unwrap_or("");
     match svc::clear_table(&state.db, table).await {
-        Ok(_) => Json(json!({ "errno": 0, "errmsg": "" })).into_response(),
+        Ok(_) => JsonResponse(json!({ "errno": 0, "errmsg": "" })).into_response(),
         Err(e) => e.into_response(),
     }
 }

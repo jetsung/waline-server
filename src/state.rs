@@ -13,6 +13,7 @@ pub struct AppState {
     pub db: Db,
     pub config: Arc<Config>,
     pub rate_limiter: Arc<RateLimiter>,
+    #[allow(dead_code)]
     pub geoip: Option<Arc<dyn GeoIp>>,
 }
 

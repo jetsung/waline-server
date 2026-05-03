@@ -8,7 +8,7 @@ use crate::{
     config::Config,
     db,
     error::AppError,
-    geoip::{self, GeoIp},
+    geoip,
     middleware::{cors, secure_domains},
     routes,
     state::AppState,

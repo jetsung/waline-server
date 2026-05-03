@@ -26,6 +26,7 @@ pub fn extract_ip(headers: &HeaderMap, fallback: &str) -> String {
         .unwrap_or_else(|| fallback.to_string())
 }
 
+#[allow(dead_code)]
 pub fn extract_lang(query_lang: Option<&str>, headers: &HeaderMap) -> String {
     if let Some(lang) = query_lang {
         if !lang.is_empty() {

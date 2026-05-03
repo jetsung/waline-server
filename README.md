@@ -414,3 +414,8 @@ cargo clippy
 ## License
 
 Apache-2.0
+
+## 仓库镜像
+
+[MyCode](https://git.jetsung.com/jetsung/waline-server) ● [AtomGit](https://atomgit.com/jetsung/waline-server) ● [GitHub](https://github.com/jetsung/waline-server)
+

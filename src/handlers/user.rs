@@ -9,6 +9,7 @@ use serde_json::json;
 
 use crate::{
     error::AppError,
+    response::Json as JsonResponse,
     services::user as svc,
     state::AppState,
     utils::{extract_token, jwt},
@@ -45,8 +46,8 @@ pub async fn register(
         &body.email, &body.password, body.url.as_deref(),
         state.config.has_smtp(), &server_url,
     ).await {
-        Ok(data) => Json(json!({ "errno": 0, "errmsg": "", "data": data })).into_response(),
-        Err(AppError::UserRegistered) => Json(json!({ "errno": 1000, "errmsg": "USER_EXIST" })).into_response(),
+        Ok(data) => JsonResponse(json!({ "errno": 0, "errmsg": "", "data": data })).into_response(),
+        Err(AppError::UserRegistered) => JsonResponse(json!({ "errno": 1000, "errmsg": "USER_EXIST" })).into_response(),
         Err(e) => e.into_response(),
     }
 }
@@ -64,16 +65,16 @@ pub struct LoginBody {
 pub async fn login(State(state): State<AppState>, Json(body): Json<LoginBody>) -> impl IntoResponse {
     match svc::login(&state.db, &body.email, &body.password, &body.code,
         &state.config.jwt_secret(), state.config.avatar_proxy_url()).await {
-        Ok(data) => Json(json!({ "errno": 0, "errmsg": "", "data": data })).into_response(),
-        Err(AppError::TwoFactorAuth) => Json(json!({ "errno": 1000, "errmsg": "TWO_FACTOR_AUTH_ERROR_DETAIL" })).into_response(),
-        Err(_) => Json(json!({ "errno": 1000, "errmsg": "" })).into_response(),
+        Ok(data) => JsonResponse(json!({ "errno": 0, "errmsg": "", "data": data })).into_response(),
+        Err(AppError::TwoFactorAuth) => JsonResponse(json!({ "errno": 1000, "errmsg": "TWO_FACTOR_AUTH_ERROR_DETAIL" })).into_response(),
+        Err(_) => JsonResponse(json!({ "errno": 1000, "errmsg": "" })).into_response(),
     }
 }
 
 // ── DELETE /api/token ─────────────────────────────────────────────────────────
 
 pub async fn logout() -> impl IntoResponse {
-    Json(json!({ "errno": 0, "errmsg": "" }))
+    JsonResponse(json!({ "errno": 0, "errmsg": "" }))
 }
 
 // ── GET /api/token ────────────────────────────────────────────────────────────
@@ -81,10 +82,10 @@ pub async fn logout() -> impl IntoResponse {
 pub async fn get_token(headers: HeaderMap, State(state): State<AppState>) -> impl IntoResponse {
     let user_id = match auth(&headers, &state.config.jwt_secret()) {
         Some(id) => id,
-        None => return Json(json!({ "errno": 401, "errmsg": "Unauthorized" })).into_response(),
+        None => return JsonResponse(json!({ "errno": 401, "errmsg": "Unauthorized" })).into_response(),
     };
     match svc::get_profile(&state.db, user_id, state.config.avatar_proxy_url()).await {
-        Ok(data) => Json(json!({ "errno": 0, "errmsg": "", "data": data })).into_response(),
+        Ok(data) => JsonResponse(json!({ "errno": 0, "errmsg": "", "data": data })).into_response(),
         Err(e) => e.into_response(),
     }
 }
@@ -112,13 +113,13 @@ pub async fn get_user(headers: HeaderMap, State(state): State<AppState>, Query(q
         // Admin: paginated list or single by email
         if let Some(email) = &q.email {
             match svc::get_by_email(&state.db, email).await {
-                Ok(Some(u)) => return Json(json!({ "errno": 0, "errmsg": "", "data": svc::build_avatar(&u, state.config.avatar_proxy_url()) })).into_response(),
-                Ok(None) => return Json(json!({ "errno": 0, "errmsg": "", "data": null })).into_response(),
+                Ok(Some(u)) => return JsonResponse(json!({ "errno": 0, "errmsg": "", "data": svc::build_avatar(&u, state.config.avatar_proxy_url()) })).into_response(),
+                Ok(None) => return JsonResponse(json!({ "errno": 0, "errmsg": "", "data": null })).into_response(),
                 Err(e) => return e.into_response(),
             }
         }
         match svc::list_users(&state.db, q.page, q.page_size, state.config.avatar_proxy_url()).await {
-            Ok(data) => Json(json!({ "errno": 0, "errmsg": "", "data": data })).into_response(),
+            Ok(data) => JsonResponse(json!({ "errno": 0, "errmsg": "", "data": data })).into_response(),
             Err(e) => e.into_response(),
         }
     } else {
@@ -126,7 +127,7 @@ pub async fn get_user(headers: HeaderMap, State(state): State<AppState>, Query(q
         let levels = state.config.levels.as_deref()
             .map(|s| s.split(',').filter_map(|v| v.trim().parse::<i64>().ok()).collect::<Vec<_>>());
         match svc::public_user_list(&state.db, q.page_size, levels.as_deref(), state.config.avatar_proxy_url()).await {
-            Ok(data) => Json(json!({ "errno": 0, "errmsg": "", "data": data })).into_response(),
+            Ok(data) => JsonResponse(json!({ "errno": 0, "errmsg": "", "data": data })).into_response(),
             Err(e) => e.into_response(),
         }
     }
@@ -153,6 +154,7 @@ pub struct UpdateProfileBody {
     pub oidc: Option<String>,
     pub huawei: Option<String>,
     // admin sets type via this field when id is in path
+    #[allow(dead_code)]
     #[serde(rename = "type")]
     pub user_type: Option<String>,
 }
@@ -160,7 +162,7 @@ pub struct UpdateProfileBody {
 pub async fn update_profile(headers: HeaderMap, State(state): State<AppState>, Json(body): Json<UpdateProfileBody>) -> impl IntoResponse {
     let user_id = match auth(&headers, &state.config.jwt_secret()) {
         Some(id) => id,
-        None => return Json(json!({ "errno": 401, "errmsg": "Unauthorized" })).into_response(),
+        None => return JsonResponse(json!({ "errno": 401, "errmsg": "Unauthorized" })).into_response(),
     };
     let fields = svc::UpdateFields {
         display_name: body.display_name,
@@ -181,7 +183,7 @@ pub async fn update_profile(headers: HeaderMap, State(state): State<AppState>, J
         user_type: None, // type change only via PUT /api/user/:id
     };
     match svc::update_profile(&state.db, user_id, None, fields).await {
-        Ok(_) => Json(json!({ "errno": 0, "errmsg": "" })).into_response(),
+        Ok(_) => JsonResponse(json!({ "errno": 0, "errmsg": "" })).into_response(),
         Err(e) => e.into_response(),
     }
 }
@@ -197,14 +199,14 @@ pub struct SetUserTypeBody {
 pub async fn set_user_type(headers: HeaderMap, State(state): State<AppState>, Path(target_id): Path<i64>, Json(body): Json<SetUserTypeBody>) -> impl IntoResponse {
     let user_id = match auth(&headers, &state.config.jwt_secret()) {
         Some(id) => id,
-        None => return Json(json!({ "errno": 401, "errmsg": "Unauthorized" })).into_response(),
+        None => return JsonResponse(json!({ "errno": 401, "errmsg": "Unauthorized" })).into_response(),
     };
     if !crate::services::comment::is_admin(&state.db, user_id).await.unwrap_or(false) {
-        return Json(json!({ "errno": 403, "errmsg": "Forbidden" })).into_response();
+        return JsonResponse(json!({ "errno": 403, "errmsg": "Forbidden" })).into_response();
     }
     let fields = svc::UpdateFields { user_type: Some(body.user_type), ..Default::default() };
     match svc::update_profile(&state.db, user_id, Some(target_id), fields).await {
-        Ok(_) => Json(json!({ "errno": 0, "errmsg": "" })).into_response(),
+        Ok(_) => JsonResponse(json!({ "errno": 0, "errmsg": "" })).into_response(),
         Err(e) => e.into_response(),
     }
 }
@@ -214,10 +216,10 @@ pub async fn set_user_type(headers: HeaderMap, State(state): State<AppState>, Pa
 pub async fn delete_user(headers: HeaderMap, State(state): State<AppState>, Path(target_id): Path<i64>) -> impl IntoResponse {
     let user_id = match auth(&headers, &state.config.jwt_secret()) {
         Some(id) => id,
-        None => return Json(json!({ "errno": 401, "errmsg": "Unauthorized" })).into_response(),
+        None => return JsonResponse(json!({ "errno": 401, "errmsg": "Unauthorized" })).into_response(),
     };
     match svc::delete_user(&state.db, user_id, target_id).await {
-        Ok(_) => Json(json!({ "errno": 0, "errmsg": "" })).into_response(),
+        Ok(_) => JsonResponse(json!({ "errno": 0, "errmsg": "" })).into_response(),
         Err(e) => e.into_response(),
     }
 }
@@ -230,7 +232,7 @@ pub struct Get2faQuery { pub email: Option<String> }
 pub async fn get_2fa(headers: HeaderMap, State(state): State<AppState>, Query(q): Query<Get2faQuery>) -> impl IntoResponse {
     let user_id = auth(&headers, &state.config.jwt_secret());
     match svc::get_2fa(&state.db, user_id, q.email.as_deref()).await {
-        Ok(data) => Json(json!({ "errno": 0, "errmsg": "", "data": data })).into_response(),
+        Ok(data) => JsonResponse(json!({ "errno": 0, "errmsg": "", "data": data })).into_response(),
         Err(e) => e.into_response(),
     }
 }
@@ -243,11 +245,11 @@ pub struct Set2faBody { pub code: String, pub secret: String }
 pub async fn set_2fa(headers: HeaderMap, State(state): State<AppState>, Json(body): Json<Set2faBody>) -> impl IntoResponse {
     let user_id = match auth(&headers, &state.config.jwt_secret()) {
         Some(id) => id,
-        None => return Json(json!({ "errno": 401, "errmsg": "Unauthorized" })).into_response(),
+        None => return JsonResponse(json!({ "errno": 401, "errmsg": "Unauthorized" })).into_response(),
     };
     match svc::enable_2fa(&state.db, user_id, &body.secret, &body.code).await {
-        Ok(_) => Json(json!({ "errno": 0, "errmsg": "" })).into_response(),
-        Err(AppError::TwoFactorAuth) => Json(json!({ "errno": 1000, "errmsg": "TWO_FACTOR_AUTH_ERROR_DETAIL" })).into_response(),
+        Ok(_) => JsonResponse(json!({ "errno": 0, "errmsg": "" })).into_response(),
+        Err(AppError::TwoFactorAuth) => JsonResponse(json!({ "errno": 1000, "errmsg": "TWO_FACTOR_AUTH_ERROR_DETAIL" })).into_response(),
         Err(e) => e.into_response(),
     }
 }
@@ -259,7 +261,7 @@ pub struct PasswordResetBody { pub email: String }
 
 pub async fn reset_password(headers: HeaderMap, State(state): State<AppState>, Json(body): Json<PasswordResetBody>) -> impl IntoResponse {
     if !state.config.has_smtp() {
-        return Json(json!({ "errno": 1000, "errmsg": "" })).into_response();
+        return JsonResponse(json!({ "errno": 1000, "errmsg": "" })).into_response();
     }
     let origin = headers.get("origin").and_then(|v| v.to_str().ok())
         .or(state.config.server_url.as_deref()).unwrap_or("").to_string();
@@ -274,7 +276,7 @@ pub async fn reset_password(headers: HeaderMap, State(state): State<AppState>, J
                     "Please click <a href=\"{{url}}\">{{url}}</a> to login and change your password as soon as possible!",
                     serde_json::json!({ "url": url })).await;
             });
-            Json(json!({ "errno": 0, "errmsg": "" })).into_response()
+            JsonResponse(json!({ "errno": 0, "errmsg": "" })).into_response()
         }
         Err(e) => e.into_response(),
     }

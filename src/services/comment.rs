@@ -55,7 +55,6 @@ pub fn format_comment_with_opts(
     let mut v = json!({
         "objectId": comment.id,
         "comment": rendered,
-        "insertedAt": comment.inserted_at,
         "nick": comment.nick,
         "link": comment.link,
         "avatar": avatar_url,
@@ -65,15 +64,20 @@ pub fn format_comment_with_opts(
         "time": time,
         "like": comment.like_count.unwrap_or(0),
         "status": comment.status,
-        "sticky": comment.sticky.map(|s| s != 0).unwrap_or(false),
         "url": comment.url,
-        "pid": comment.pid,
-        "rid": comment.rid,
         "user_id": comment.user_id,
     });
 
     // orig: raw markdown (always visible - user's original input)
     v["orig"] = json!(orig);
+
+    // Only include pid/rid for replies (not root comments)
+    if let Some(pid) = comment.pid {
+        v["pid"] = json!(pid);
+    }
+    if let Some(rid) = comment.rid {
+        v["rid"] = json!(rid);
+    }
 
     if let Some(u) = matched_user {
         v["type"] = json!(u.user_type);

@@ -37,7 +37,8 @@ target
 /target
 
 # Develop
-waline.sqlite
-.env
+/.env
+/*.xdb
+/waline.sqlite
 waline
 waline-mini

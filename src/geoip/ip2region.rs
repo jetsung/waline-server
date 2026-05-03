@@ -83,6 +83,7 @@ impl Ip2RegionGeoIp {
     ///
     /// * `Ok(Ip2RegionGeoIp)` - 创建成功
     /// * `Err(GeoIpError)` - 创建失败
+    #[allow(dead_code)]
     pub fn with_default_cache<P: AsRef<Path>>(db_path: P) -> Result<Self, GeoIpError> {
         Self::new(db_path, CachePolicy::VectorIndex)
     }

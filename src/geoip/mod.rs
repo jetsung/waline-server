@@ -57,6 +57,7 @@ impl GeoIpInfo {
     }
 
     /// 检查是否为空
+    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.country.is_empty()
             && self.province.is_empty()

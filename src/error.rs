@@ -1,9 +1,11 @@
 use axum::{
-    http::StatusCode,
     response::{IntoResponse, Response},
 };
 use serde_json::json;
 
+use crate::response::Json as JsonResponse;
+
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum AppError {
     Config(String),
@@ -14,11 +16,8 @@ pub enum AppError {
     NotFound,
     UserNotFound,
     UserRegistered,
-    DuplicateContent,
-    FrequencyLimited,
     TokenExpired,
     TwoFactorAuth,
-    Akismet,
     Internal(String),
 }
 
@@ -38,8 +37,6 @@ impl AppError {
             Self::Forbidden => "FORBIDDEN",
             Self::UserNotFound => "USER_NOT_FOUND",
             Self::UserRegistered => "USER_REGISTERED",
-            Self::DuplicateContent => "Duplicate Content",
-            Self::FrequencyLimited => "Comment too fast!",
             Self::TokenExpired => "TOKEN_EXPIRED",
             Self::TwoFactorAuth => "TWO_FACTOR_AUTH_ERROR_DETAIL",
             _ => "",
@@ -59,7 +56,7 @@ impl IntoResponse for AppError {
             "errno": self.errno(),
             "errmsg": self.message_key(),
         });
-        (StatusCode::OK, axum::Json(body)).into_response()
+        JsonResponse(body).into_response()
     }
 }
 

@@ -14,6 +14,7 @@ use serde_json::{Value, json};
 use crate::{
     error::AppError,
     models::comment,
+    response::Json as JsonResponse,
     services::{comment as svc, notify::{self, NotifyContext}},
     state::AppState,
     utils::{extract_ip, extract_token, jwt, spam, ua},
@@ -38,7 +39,6 @@ pub struct GetCommentQuery {
     pub keyword: Option<String>,
     #[serde(default = "default_count")]
     pub count: i64,
-    pub lang: Option<String>,
 }
 
 fn default_page() -> i64 { 1 }
@@ -55,7 +55,6 @@ pub struct PostCommentBody {
     pub url: String,
     pub pid: Option<i64>,
     pub rid: Option<i64>,
-    pub at: Option<String>,
     #[serde(rename = "recaptchaV3")]
     pub recaptcha_v3: Option<String>,
     pub turnstile: Option<String>,
@@ -100,32 +99,32 @@ pub async fn get_comment(
                 .map(|u| u.split(',').map(|s| s.trim().to_string()).collect())
                 .unwrap_or_default();
             match get_comment_count(&state, &urls, user_id).await {
-                Ok(d) => Json(json!({ "errno": 0, "errmsg": "", "data": d })).into_response(),
+                Ok(d) => JsonResponse(json!({ "errno": 0, "errmsg": "", "data": d })).into_response(),
                 Err(e) => e.into_response(),
             }
         }
         "recent" => {
             match get_recent(&state, q.count.min(50), is_admin, user_id).await {
-                Ok(d) => Json(json!({ "errno": 0, "errmsg": "", "data": d })).into_response(),
+                Ok(d) => JsonResponse(json!({ "errno": 0, "errmsg": "", "data": d })).into_response(),
                 Err(e) => e.into_response(),
             }
         }
         "list" => {
             if !is_admin {
-                return Json(json!({ "errno": 403, "errmsg": "Forbidden" })).into_response();
+                return JsonResponse(json!({ "errno": 403, "errmsg": "Forbidden" })).into_response();
             }
             match get_admin_list(&state, q.page, q.page_size.min(100), q.owner.as_deref(), q.status.as_deref(), q.keyword.as_deref(), user_id).await {
-                Ok(d) => Json(json!({ "errno": 0, "errmsg": "", "data": d })).into_response(),
+                Ok(d) => JsonResponse(json!({ "errno": 0, "errmsg": "", "data": d })).into_response(),
                 Err(e) => e.into_response(),
             }
         }
         _ => {
             let path = match q.path.as_deref().or(q.url.as_deref()) {
                 Some(p) => p.to_string(),
-                None => return Json(json!({ "errno": 1000, "errmsg": "path required" })).into_response(),
+                None => return JsonResponse(json!({ "errno": 1000, "errmsg": "path required" })).into_response(),
             };
             match get_list(&state, &path, q.page, q.page_size.min(100), q.sort_by.as_deref().unwrap_or("insertedAt_desc"), is_admin, user_id).await {
-                Ok(d) => Json(json!({ "errno": 0, "errmsg": "", "data": d })).into_response(),
+                Ok(d) => JsonResponse(json!({ "errno": 0, "errmsg": "", "data": d })).into_response(),
                 Err(e) => e.into_response(),
             }
         }
@@ -366,26 +365,26 @@ pub async fn post_comment(
     };
 
     if user_id.is_none() && state.config.is_login_force() {
-        return Json(json!({ "errno": 401, "errmsg": "Unauthorized" })).into_response();
+        return JsonResponse(json!({ "errno": 401, "errmsg": "Unauthorized" })).into_response();
     }
 
     if !is_admin {
         // Captcha
         if let (Some(token), Some(secret)) = (&body.recaptcha_v3, &state.config.recaptcha_v3_secret) {
             if !spam::verify_recaptcha(secret, token).await {
-                return Json(json!({ "errno": 1000, "errmsg": "Captcha failed" })).into_response();
+                return JsonResponse(json!({ "errno": 1000, "errmsg": "Captcha failed" })).into_response();
             }
         }
         if let (Some(token), Some(secret)) = (&body.turnstile, &state.config.turnstile_secret) {
             if !spam::verify_turnstile(secret, token).await {
-                return Json(json!({ "errno": 1000, "errmsg": "Captcha failed" })).into_response();
+                return JsonResponse(json!({ "errno": 1000, "errmsg": "Captcha failed" })).into_response();
             }
         }
         if state.config.disallow_ip_list.contains(&client_ip) {
-            return Json(json!({ "errno": 403, "errmsg": "Forbidden" })).into_response();
+            return JsonResponse(json!({ "errno": 403, "errmsg": "Forbidden" })).into_response();
         }
         if !state.rate_limiter.check(&client_ip) {
-            return Json(json!({ "errno": 1000, "errmsg": "Comment too fast!" })).into_response();
+            return JsonResponse(json!({ "errno": 1000, "errmsg": "Comment too fast!" })).into_response();
         }
         // Duplicate
         let dup_count = comment::Entity::find()
@@ -397,7 +396,7 @@ pub async fn post_comment(
             .await
             .unwrap_or(0);
         if dup_count > 0 {
-            return Json(json!({ "errno": 1000, "errmsg": "Duplicate Content" })).into_response();
+            return JsonResponse(json!({ "errno": 1000, "errmsg": "Duplicate Content" })).into_response();
         }
     }
 
@@ -492,7 +491,7 @@ pub async fn post_comment(
         });
     }
 
-    Json(json!({ "errno": 0, "errmsg": "", "data": resp })).into_response()
+    JsonResponse(json!({ "errno": 0, "errmsg": "", "data": resp })).into_response()
 }
 
 // ── PUT /api/comment/:id ──────────────────────────────────────────────────────
@@ -527,7 +526,7 @@ pub async fn put_comment(
                 } else {
                     None
                 };
-                Json(json!({ "errno": 0, "errmsg": "", "data": svc::format_comment(&c, user.as_ref(), &state.config, false) })).into_response()
+                JsonResponse(json!({ "errno": 0, "errmsg": "", "data": svc::format_comment(&c, user.as_ref(), &state.config, false) })).into_response()
             }
             _ => AppError::NotFound.into_response(),
         };
@@ -535,7 +534,7 @@ pub async fn put_comment(
 
     let user_id = match auth(&headers, &state.config.jwt_secret()) {
         Some(id) => id,
-        None => return Json(json!({ "errno": 401, "errmsg": "Unauthorized" })).into_response(),
+        None => return JsonResponse(json!({ "errno": 401, "errmsg": "Unauthorized" })).into_response(),
     };
     let is_admin = svc::is_admin(&state.db, user_id).await.unwrap_or(false);
 
@@ -546,7 +545,7 @@ pub async fn put_comment(
     };
 
     if !is_admin && existing.user_id != Some(user_id) {
-        return Json(json!({ "errno": 403, "errmsg": "Forbidden" })).into_response();
+        return JsonResponse(json!({ "errno": 403, "errmsg": "Forbidden" })).into_response();
     }
 
     let mut active: ActiveModel = existing.clone().into();
@@ -592,7 +591,7 @@ pub async fn put_comment(
     } else {
         None
     };
-    Json(json!({ "errno": 0, "errmsg": "", "data": svc::format_comment(&updated, user.as_ref(), &state.config, is_admin) })).into_response()
+    JsonResponse(json!({ "errno": 0, "errmsg": "", "data": svc::format_comment(&updated, user.as_ref(), &state.config, is_admin) })).into_response()
 }
 
 // ── DELETE /api/comment/:id ───────────────────────────────────────────────────
@@ -604,7 +603,7 @@ pub async fn delete_comment(
 ) -> impl IntoResponse {
     let user_id = match auth(&headers, &state.config.jwt_secret()) {
         Some(id) => id,
-        None => return Json(json!({ "errno": 401, "errmsg": "Unauthorized" })).into_response(),
+        None => return JsonResponse(json!({ "errno": 401, "errmsg": "Unauthorized" })).into_response(),
     };
     let is_admin = svc::is_admin(&state.db, user_id).await.unwrap_or(false);
 
@@ -615,7 +614,7 @@ pub async fn delete_comment(
     };
 
     if !is_admin && existing.user_id != Some(user_id) {
-        return Json(json!({ "errno": 403, "errmsg": "Forbidden" })).into_response();
+        return JsonResponse(json!({ "errno": 403, "errmsg": "Forbidden" })).into_response();
     }
 
     // Delete this comment and all replies
@@ -628,7 +627,7 @@ pub async fn delete_comment(
         .exec(&state.db)
         .await;
 
-    Json(json!({ "errno": 0, "errmsg": "" })).into_response()
+    JsonResponse(json!({ "errno": 0, "errmsg": "" })).into_response()
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────

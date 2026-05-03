@@ -1,7 +1,7 @@
 use axum::{
     extract::{Query, State},
     http::{HeaderMap, header},
-    response::{Html, IntoResponse, Redirect},
+    response::{Html, IntoResponse},
 };
 use serde::Deserialize;
 
@@ -9,6 +9,7 @@ use crate::state::AppState;
 
 #[derive(Debug, Deserialize)]
 pub struct UiQuery {
+    #[allow(dead_code)]
     pub token: Option<String>,
 }
 
